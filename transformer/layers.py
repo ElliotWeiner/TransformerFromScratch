@@ -6,8 +6,6 @@ import scipy
 def multi_head_attention(Q, K, V, num_heads):   
     '''
     multi-head attention mechanism
-
-    would like to compute each head in parallel
     '''
 
 
@@ -47,7 +45,7 @@ def relu(x):
 
 def layer_norm(x):
     '''
-    Layer normalization
+    layer normalization
     '''
 
     mean = np.mean(x, axis = -1, keepdims=True)
@@ -56,23 +54,29 @@ def layer_norm(x):
 
     return (x - mean) / (std + epsilon)
 
-def feed_forward(x):
+
+def feed_forward(x, w, b):
     pass
     '''
-    Feed forward network
+    feed forward network
     '''
 
+    ff_1 = relu(x @ w[0] + b[0])
+    ff_2 = ff_1 @ w[1] + b[1]
 
-def transformer_block(Q, K, V, num_heads):
+    return ff_2
+
+
+def transformer_block(Q, K, V, num_heads, w, b):
     '''
-    Single transformer block
+    single transformer block
     '''
 
     x = multi_head_attention(Q, K, V, num_heads)
     x = Q + x
     x = layer_norm(x)
 
-    ff = feed_forward(x)
+    ff = feed_forward(x, w, b)
     ff = ff + x
     ff = layer_norm(ff)
 
