@@ -35,3 +35,45 @@ def attention(Q, K, V):
     output = scores @ V
 
     return output
+
+
+def relu(x):
+    '''
+    ReLU activation function
+    '''
+
+    return np.maximum(0, x)
+
+
+def layer_norm(x):
+    '''
+    Layer normalization
+    '''
+
+    mean = np.mean(x, axis = -1, keepdims=True)
+    std = np.std(x, axis = -1, keepdims=True)
+    epsilon = 1e-9
+
+    return (x - mean) / (std + epsilon)
+
+def feed_forward(x):
+    pass
+    '''
+    Feed forward network
+    '''
+
+
+def transformer_block(Q, K, V, num_heads):
+    '''
+    Single transformer block
+    '''
+
+    x = multi_head_attention(Q, K, V, num_heads)
+    x = Q + x
+    x = layer_norm(x)
+
+    ff = feed_forward(x)
+    ff = ff + x
+    ff = layer_norm(ff)
+
+    return ff
