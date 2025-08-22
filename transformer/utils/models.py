@@ -9,6 +9,60 @@ class param:
     weight: np.ndarray
     grad_weight: np.ndarray
 
+
+class ViT_embedding:
+    '''
+    vision transformer embedding layer
+    '''
+    def __init__(self, input_shape, embed_dim):
+        
+
+        self.input_shape = input_shape
+        self.embed_dim = embed_dim
+
+        self.patch_size = 16
+        patch_dim = self.patch_size * self.patch_size * input_shape[-1]
+
+        self.weights = {
+            "W": param(random_init((patch_dim, embed_dim)), np.zeros((patch_dim, embed_dim))),
+            "b": param(random_init((embed_dim,)), np.zeros((embed_dim,))),
+        }
+
+        self.weight_names = ['weights']
+
+    def forward(self, x):
+        '''
+        forward pass
+        '''
+        # patchify input
+
+
+        B, H, W, D = x.shape
+        num_patches_h = H // self.patch_size
+        num_patches_w = W // self.patch_size
+        L = num_patches_h * num_patches_w  # total patches
+        # patchify to 16x16
+        # (B, H, W, D) -> (B, H // 16, 16, W // 16, 16, D)
+        x = x.reshape(B, num_patches_h, self.patch_size, num_patches_w, self.patch_size, D)
+        x = x.transpose(0, 1, 3, 2, 4, 5)
+        # flatten patches to be (B, L, patch_size * patch_size * D)
+        x = x.reshape(B, num_patches_h * num_patches_w, self.patch_size * self.patch_size * D)
+
+        W, b = self.weights["W"].weight, self.weights["b"].weight
+
+        out = x @ W + b
+        out = out.reshape(B, L, self.embed_dim)
+
+        return out
+
+    # TODO
+    def backward(self, grad_output):
+        '''
+        backward pass
+        '''
+        pass
+
+
 class Transformer:
     '''
     transformer model
@@ -42,6 +96,8 @@ class Transformer:
             "b2": param(random_init((d_model,)), np.zeros((d_model,))),
         }
 
+        self.weight_names = ['weights_attention', 'weights_linear']
+
     def forward(self, Q, K, V):
         '''
         forward pass
@@ -54,8 +110,6 @@ class Transformer:
         backward pass
         '''
         pass
-
-
 
 
 # shouldn't event need to touch

@@ -18,20 +18,15 @@ def step(model, learning_rate):
     each param needs a grad attribute
     simple SGD step
     '''
-    for param in model.weights_attention.keys():
-        model.weights_attention[param].weight -= learning_rate * model.weights_attention[param].grad_weight
-
-    for param in model.weights_linear.keys():
-        model.weights_linear[param].weight -= learning_rate * model.weights_linear[param].grad_weight
+    for name in model.weight_names:
+        for param in model.__dict__[name].keys():
+            model.__dict__[name][param].weight -= learning_rate * model.__dict__[name][param].grad_weight
 
 
 def zero_grad(model):
-    for param in model.weights_attention.keys():
-        model.weights_attention[param].grad_weight[:] = 0.0
-
-    for param in model.weights_linear.keys():
-        model.weights_linear[param].grad_weight[:] = 0.0
-
+    for name in model.weight_names:
+        for param in model.__dict__[name].keys():
+            model.__dict__[name][param].grad_weight[:] = 0.0
 
 def random_init(shape):
     return np.random.randn(*shape) * 0.01

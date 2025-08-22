@@ -23,14 +23,16 @@ def train_vit(model, train_data, epochs=10, learning_rate=0.001):
     for epoch in range(epochs):
         for batch in train_data:
             # Forward pass
-            outputs = model.forward(batch['inputs'])
-            
+            embeddings = model["embedding"].forward(batch['inputs'])
+            outputs = model['transformer'].forward(embeddings)
+
             #loss = utils.compute_loss(outputs, batch['labels'])
             #model.backward(loss)
 
             # Update weights
-            utils.step(model, learning_rate)
-            utils.zero_grad(model)
+            for key in model.keys():
+                utils.step(model[key], learning_rate)
+                utils.zero_grad(model[key])
 
         print(f"Epoch {epoch + 1}/{epochs} completed.")
 
@@ -44,13 +46,14 @@ if __name__ == "__main__":
 
     # Dummy dataset parameters
     total_samples = 800   # total number of samples
-    seq_len = 16        # sequence length (e.g., number of patches)
     embed_dim = 64      # embedding dimension
     num_classes = 2    # number of classes
     batch_size = 4      # batch size
-
+    input_shape = (224, 224, 3)
+    embedding_shape = [input_shape[0] // 16 * input_shape[1] // 16, embed_dim]
+                   
     # Random inputs
-    dummy_inputs = np.random.randn(total_samples, seq_len, embed_dim)
+    dummy_inputs = np.random.randn(total_samples, input_shape[0], input_shape[1], input_shape[2])
 
     # One-hot labels
     dummy_labels = np.zeros((total_samples, num_classes))
@@ -63,8 +66,11 @@ if __name__ == "__main__":
     ]
 
     num_heads = 8
-    input_shape = (seq_len, embed_dim)
+    
 
-    vit_model = models.ViT(num_heads, input_shape)
+    vit_model = {
+        "embedding": models.ViT_embedding(input_shape, embed_dim),
+        "transformer": models.ViT(num_heads, embedding_shape)
+    }
 
     train_vit(vit_model, train_data, epochs=10, learning_rate=0.001)
