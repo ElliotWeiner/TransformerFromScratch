@@ -49,8 +49,8 @@ if __name__ == "__main__":
     embed_dim = 64      # embedding dimension
     num_classes = 2    # number of classes
     batch_size = 4      # batch size
-    input_shape = (224, 224, 3)
-    embedding_shape = [input_shape[0] // 16 * input_shape[1] // 16, embed_dim]
+    input_shape = (128, 128, 3)
+    embedding_shape = [1 + input_shape[0] // 16 * input_shape[1] // 16, embed_dim]
                    
     # Random inputs
     dummy_inputs = np.random.randn(total_samples, input_shape[0], input_shape[1], input_shape[2])

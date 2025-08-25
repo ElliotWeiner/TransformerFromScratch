@@ -16,10 +16,8 @@ class ViT_embedding:
     '''
     def __init__(self, input_shape, embed_dim):
         
-
         self.input_shape = input_shape
         self.embed_dim = embed_dim
-
         self.patch_size = 16
         patch_dim = self.patch_size * self.patch_size * input_shape[-1]
 
@@ -27,31 +25,40 @@ class ViT_embedding:
             "W": param(random_init((patch_dim, embed_dim)), np.zeros((patch_dim, embed_dim))),
             "b": param(random_init((embed_dim,)), np.zeros((embed_dim,))),
         }
-
         self.weight_names = ['weights']
+
+        self.H, self.W, self.D = self.input_shape
+        self.num_patches_h = self.H // self.patch_size
+        self.num_patches_w = self.W // self.patch_size
+        self.L = self.num_patches_h * self.num_patches_w  # total patches
+
+        # add CLS token
+        self.cls_token = param(random_init((1, 1, embed_dim)), np.zeros((1, 1, embed_dim)))
+
+        # add position embedding
+        self.pos_embedding = param(random_init((1, self.L + 1, embed_dim)), np.zeros((1, self.L + 1, embed_dim)))
+
 
     def forward(self, x):
         '''
         forward pass
         '''
-        # patchify input
 
+        B = x.shape[0]
 
-        B, H, W, D = x.shape
-        num_patches_h = H // self.patch_size
-        num_patches_w = W // self.patch_size
-        L = num_patches_h * num_patches_w  # total patches
         # patchify to 16x16
-        # (B, H, W, D) -> (B, H // 16, 16, W // 16, 16, D)
-        x = x.reshape(B, num_patches_h, self.patch_size, num_patches_w, self.patch_size, D)
+        x = x.reshape(B, self.num_patches_h, self.patch_size, self.num_patches_w, self.patch_size, self.D)
         x = x.transpose(0, 1, 3, 2, 4, 5)
         # flatten patches to be (B, L, patch_size * patch_size * D)
-        x = x.reshape(B, num_patches_h * num_patches_w, self.patch_size * self.patch_size * D)
+        x = x.reshape(B, self.num_patches_h * self.num_patches_w, self.patch_size * self.patch_size * self.D)
 
         W, b = self.weights["W"].weight, self.weights["b"].weight
 
         out = x @ W + b
-        out = out.reshape(B, L, self.embed_dim)
+
+        out = np.concatenate([np.tile(self.cls_token.weight, (B, 1, 1)), out], axis=1)
+        out += self.pos_embedding.weight
+        
 
         return out
 
