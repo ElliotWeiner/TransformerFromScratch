@@ -1,12 +1,11 @@
 import numpy as np
 
 # assume Q dims are divisible by num_heads
-def self_attention(x, num_heads, weights_att, weights_norm_att):
+def self_attention(x, num_heads, weights_att):
     """
     self-attention mechanism
     """
-    x_norm = layer_norm(x, weights_norm_att)
-    res, attention_cls =  multi_head_attention(x_norm, x_norm, x_norm, num_heads, weights_att)
+    res, attention_cls =  multi_head_attention(x, x, x, num_heads, weights_att)
 
     return res, attention_cls
 
@@ -101,20 +100,4 @@ def feed_forward(x, weights_ff, weights_norm_ff):
     ff_1 = relu(x @ weights_ff["W1"].weight + weights_ff["b1"].weight)
     ff_2 = ff_1 @ weights_ff["W2"].weight + weights_ff["b2"].weight
 
-    return ff_2
-
-
-def transformer_block(Q, K, V, num_heads, weights_attention, weights_linear, weights_norm_att, weights_norm_ff):
-    '''
-    single transformer block
-    
-    currently assumes Q, K, V are the same
-    '''
-
-    x, attention_scores = self_attention(Q, num_heads, weights_attention, weights_norm_att)
-    x = Q + x
-
-    ff = feed_forward(x, weights_linear, weights_norm_ff)
-    ff = ff + x
-
-    return ff
+    return ff_2, ff_1

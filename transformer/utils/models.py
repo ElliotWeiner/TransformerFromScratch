@@ -25,12 +25,13 @@ class ViT_embedding:
             "W": param(random_init((patch_dim, embed_dim)), np.zeros((patch_dim, embed_dim))),
             "b": param(random_init((embed_dim,)), np.zeros((embed_dim,))),
         }
-        self.weight_names = ['weights']
-
+        
         self.H, self.W, self.D = self.input_shape
         self.num_patches_h = self.H // self.patch_size
         self.num_patches_w = self.W // self.patch_size
         self.L = self.num_patches_h * self.num_patches_w  # total patches
+
+        self.input_patch_size = self.patch_size * self.patch_size * self.D
 
         # add CLS token
         self.cls_token = param(random_init((1, 1, embed_dim)), np.zeros((1, 1, embed_dim)))
@@ -38,11 +39,13 @@ class ViT_embedding:
         # add position embedding
         self.pos_embedding = param(random_init((1, self.L + 1, embed_dim)), np.zeros((1, self.L + 1, embed_dim)))
 
+        self.weight_names = ['weights', 'cls_token', 'pos_embedding']
 
     def forward(self, x):
         '''
         forward pass
         '''
+        self.x = x
 
         B = x.shape[0]
 
@@ -50,7 +53,7 @@ class ViT_embedding:
         x = x.reshape(B, self.num_patches_h, self.patch_size, self.num_patches_w, self.patch_size, self.D)
         x = x.transpose(0, 1, 3, 2, 4, 5)
         # flatten patches to be (B, L, patch_size * patch_size * D)
-        x = x.reshape(B, self.num_patches_h * self.num_patches_w, self.patch_size * self.patch_size * self.D)
+        x = x.reshape(B, self.num_patches_h * self.num_patches_w, self.input_patch_size)
 
         W, b = self.weights["W"].weight, self.weights["b"].weight
 
@@ -67,7 +70,17 @@ class ViT_embedding:
         '''
         backward pass
         '''
-        pass
+        self.pos_embedding.grad_weight += grad_output
+
+        self.cls_token.grad_weight += np.sum(grad_output[:,0,:], axis=0)
+
+        self.weights["b"].grad_weight += np.sum(grad_output[:,1:,:], axis=(0,1))
+
+        
+        self.weights["W"].grad_weight += self.x.reshape(-1, self.input_patch_size).T  @ grad_output[:,1:,:].reshape(-1, self.embed_dim)
+
+        # deepest, no need to return anything
+        return 
 
 
 class Transformer:
@@ -92,24 +105,24 @@ class Transformer:
             "bo": param(random_init((input_shape[-1],)), np.zeros((input_shape[-1],))),
         }
 
-        d_model = input_shape[-1]
-        d_ff = 4 * d_model
+        self.d_model = input_shape[-1]
+        self.d_ff = 4 * self.d_model
 
         self.weights_linear = {
-            "W1": param(random_init((d_model, d_ff)), np.zeros((d_model, d_ff))),
-            "b1": param(random_init((d_ff,)), np.zeros((d_ff,))),
-            "W2": param(random_init((d_ff, d_model)), np.zeros((d_ff, d_model))),
-            "b2": param(random_init((d_model,)), np.zeros((d_model,))),
+            "W1": param(random_init((self.d_model, self.d_ff)), np.zeros((self.d_model, self.d_ff))),
+            "b1": param(random_init((self.d_ff,)), np.zeros((self.d_ff,))),
+            "W2": param(random_init((self.d_ff, self.d_model)), np.zeros((self.d_ff, self.d_model))),
+            "b2": param(random_init((self.d_model,)), np.zeros((self.d_model,))),
         }
 
         self.weights_norm_att = {
-            "gamma": param(random_init((d_model,)), np.ones((d_model,))),
-            "beta": param(random_init((d_model,)), np.zeros((d_model,))),
+            "gamma": param(random_init((self.d_model,)), np.ones((self.d_model,))),
+            "beta": param(random_init((self.d_model,)), np.zeros((self.d_model,))),
         }
 
         self.weights_norm_ff = {
-            "gamma": param(random_init((d_model,)), np.ones((d_model,))),
-            "beta": param(random_init((d_model,)), np.zeros((d_model,))),
+            "gamma": param(random_init((self.d_model,)), np.ones((self.d_model,))),
+            "beta": param(random_init((self.d_model,)), np.zeros((self.d_model,))),
         }
 
         self.weight_names = ['weights_attention', 'weights_linear', 'weights_norm_att', 'weights_norm_ff']
@@ -118,14 +131,74 @@ class Transformer:
         '''
         forward pass
         '''
-        return transformer_block(Q, K, V, self.num_heads, self.weights_attention, self.weights_linear, self.weights_norm_att, self.weights_norm_ff)
-    
+        self.x = (Q, K, V)
+
+        x_norm = layer_norm(x, self.weights_norm_att)
+        self.n1 = x_norm
+
+        x, attention_scores = self_attention(x_norm, self.num_heads, self.weights_attention)
+        self.mha = x
+
+        x = Q + x
+
+
+        x_norm = layer_norm(x, self.weights_norm_ff)
+        self.n2 = x_norm
+        ff, intermediate_x = feed_forward(x_norm, self.weights_linear, self.weights_norm_ff)
+        self.ff1 = intermediate_x
+        self.ff2 = ff
+
+        ff = ff + x
+
+        return ff
+
     # TODO
     def backward(self, grad_output):
         '''
         backward pass
         '''
-        pass
+
+        # feed forward
+        self.weights_linear['b2'].grad_weight += np.sum(grad_output, axis=0)
+        self.weights_linear['W2'].grad_weight += self.ff1.reshape(-1, self.d_ff).T @ grad_output.reshape(-1, self.d_model)
+        grad = grad_output @ self.weights_linear['W2'].weight.T
+
+        self.weights_linear['b1'].grad_weight += np.sum(grad * (self.ff1 > 0), axis=0)
+        self.weights_linear['W1'].grad_weight += self.n2.reshape(-1, self.d_model).T @ grad.reshape(-1, self.d_ff)
+        grad = (grad @ self.weights_linear['W1'].weight.T) * (self.ff1 > 0)
+        
+
+        # layer norm ff
+        self.weights_norm_ff['beta'].grad_weight += np.sum(grad, axis=(0,1))
+        self.weights_norm_ff['gamma'].grad_weight += 
+        grad = 
+
+
+        # attention
+        self.weights_attention['bo'].grad_weight += np.sum(grad, axis=0)
+        self.weights_attention['Wo'].grad_weight += 
+        grad = 
+
+        self.weights_attention['bv'].grad_weight += np.sum(grad, axis=0)
+        self.weights_attention['Wv'].grad_weight += 
+        grad =
+
+        self.weights_attention['bk'].grad_weight += np.sum(grad, axis=0)
+        self.weights_attention['Wk'].grad_weight += 
+        grad =
+
+        self.weights_attention['bq'].grad_weight += np.sum(grad, axis=0)
+        self.weights_attention['Wq'].grad_weight += 
+        grad =
+
+
+        # layer norm att
+        self.weights_norm_att['beta'].grad_weight += np.sum(grad, axis=(0,1))
+        self.weights_norm_att['gamma'].grad_weight += 
+        grad = 
+
+
+        return grad
 
 
 # shouldn't event need to touch
