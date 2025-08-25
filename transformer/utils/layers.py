@@ -68,15 +68,17 @@ def softmax(x, axis=-1):
     return e / np.sum(e, axis=axis, keepdims=True)
 
 
-# TODO: this should be learnable
-def layer_norm(x):
+def layer_norm(x, weights):
     '''
     layer normalization
     '''
-
-    mean = np.mean(x, axis=-1, keepdims=True)
-    var = np.var(x, axis=-1, keepdims=True)
-    return (x - mean) / np.sqrt(var + 1e-9)
+    gamma, beta = weights["gamma"].weight, weights["beta"].weight
+    
+    mean = np.mean(x, axis=-1, keepdims=True) 
+    var = np.var(x, axis=-1, keepdims=True) 
+    
+    norm = (x - mean) / np.sqrt(var + 1e-9)
+    return norm * gamma + beta
 
 
 def feed_forward(x, weights):
@@ -90,17 +92,18 @@ def feed_forward(x, weights):
     return ff_2
 
 
-def transformer_block(Q, K, V, num_heads, weights_attention, weights_linear):
+def transformer_block(Q, K, V, num_heads, weights_attention, weights_linear, weights_norm):
     '''
     single transformer block
     '''
-
-    x = multi_head_attention(Q, K, V, num_heads, weights_attention)
+    Q_norm = layer_norm(Q, weights_norm)
+    K_norm = layer_norm(K, weights_norm)
+    V_norm = layer_norm(V, weights_norm)
+    x = multi_head_attention(Q_norm, K_norm, V_norm, num_heads, weights_attention)
     x = Q + x
-    x = layer_norm(x)
 
+    x = layer_norm(x, weights_norm)
     ff = feed_forward(x, weights_linear)
     ff = ff + x
-    ff = layer_norm(ff)
 
     return ff
