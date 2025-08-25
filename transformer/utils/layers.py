@@ -32,7 +32,7 @@ def multi_head_attention(Q, K, V, num_heads, weights):
 
     M = combine_heads(Ah)
     out = M @ Wo + bo
-    return out, scores[:, 0, :, :]
+    return out, scores[:, 0, :, :], M
 
 
 def split_heads(x, num_heads):
@@ -86,8 +86,9 @@ def layer_norm(x, weights):
     mean = np.mean(x, axis=-1, keepdims=True) 
     var = np.var(x, axis=-1, keepdims=True) 
     
-    norm = (x - mean) / np.sqrt(var + 1e-9)
-    return norm * gamma + beta
+    inv_std = 1.0 / np.sqrt(var + 1e-9)
+    norm = (x - mean) * inv_std
+    return norm * gamma + beta, norm, inv_std
 
 
 def feed_forward(x, weights_ff, weights_norm_ff):

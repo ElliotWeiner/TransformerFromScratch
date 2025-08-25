@@ -133,20 +133,21 @@ class Transformer:
         '''
         self.x = (Q, K, V)
 
-        x_norm = layer_norm(x, self.weights_norm_att)
+        x_norm, prescale, inv_std = layer_norm(x, self.weights_norm_att)
+        self.prescale1 = prescale
+        self.inv_std1 = inv_std
         self.n1 = x_norm
 
-        x, attention_scores = self_attention(x_norm, self.num_heads, self.weights_attention)
-        self.mha = x
-
+        x, attention_scores, pre_x = self_attention(x_norm, self.num_heads, self.weights_attention)
+        self.x_output_attention = pre_x
         x = Q + x
 
-
-        x_norm = layer_norm(x, self.weights_norm_ff)
+        x_norm, prescale, inv_std = layer_norm(x, self.weights_norm_ff)
+        self.prescale2 = prescale
+        self.inv_std2 = inv_std
         self.n2 = x_norm
         ff, intermediate_x = feed_forward(x_norm, self.weights_linear, self.weights_norm_ff)
         self.ff1 = intermediate_x
-        self.ff2 = ff
 
         ff = ff + x
 
@@ -170,14 +171,19 @@ class Transformer:
 
         # layer norm ff
         self.weights_norm_ff['beta'].grad_weight += np.sum(grad, axis=(0,1))
-        self.weights_norm_ff['gamma'].grad_weight += 
-        grad = 
+        self.weights_norm_ff['gamma'].grad_weight += np.sum(grad * self.prescale2, axis=(0,1))
+        
+        # formula from online
+        grad = (1 / self.d_model) * self.inv_std2 * (
+            self.d_model * grad - np.sum(grad, axis=-1, keepdims=True)
+            - self.prescale2 * np.sum(grad * self.prescale2, axis=-1, keepdims=True)
+        )
 
 
         # attention
-        self.weights_attention['bo'].grad_weight += np.sum(grad, axis=0)
-        self.weights_attention['Wo'].grad_weight += 
-        grad = 
+        self.weights_attention['bo'].grad_weight += np.sum(grad, axis=(0,1))
+        self.weights_attention['Wo'].grad_weight += self.x_output_attention.reshape(-1, self.d_model).T @ grad.reshape(-1, self.d_model)
+        grad = grad @ self.weights_attention['Wo'].weight.T
 
         self.weights_attention['bv'].grad_weight += np.sum(grad, axis=0)
         self.weights_attention['Wv'].grad_weight += 
@@ -194,8 +200,12 @@ class Transformer:
 
         # layer norm att
         self.weights_norm_att['beta'].grad_weight += np.sum(grad, axis=(0,1))
-        self.weights_norm_att['gamma'].grad_weight += 
-        grad = 
+        self.weights_norm_att['gamma'].grad_weight += np.sum(grad * self.x[0], axis=(0,1)) # <-- for ViT
+        # formula from online
+        grad = (1 / self.d_model) * self.inv_std1 * (
+            self.d_model * grad - np.sum(grad, axis=-1, keepdims=True)
+            - self.x[0] * np.sum(grad * self.x[0], axis=-1, keepdims=True)
+        )
 
 
         return grad
