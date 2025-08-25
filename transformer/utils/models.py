@@ -92,7 +92,6 @@ class Transformer:
             "bo": param(random_init((input_shape[-1],)), np.zeros((input_shape[-1],))),
         }
 
-        # what would this weight shape be?
         d_model = input_shape[-1]
         d_ff = 4 * d_model
 
@@ -103,18 +102,23 @@ class Transformer:
             "b2": param(random_init((d_model,)), np.zeros((d_model,))),
         }
 
-        self.weights_norm = {
+        self.weights_norm_att = {
             "gamma": param(random_init((d_model,)), np.ones((d_model,))),
             "beta": param(random_init((d_model,)), np.zeros((d_model,))),
         }
 
-        self.weight_names = ['weights_attention', 'weights_linear', 'weights_norm']
+        self.weights_norm_ff = {
+            "gamma": param(random_init((d_model,)), np.ones((d_model,))),
+            "beta": param(random_init((d_model,)), np.zeros((d_model,))),
+        }
+
+        self.weight_names = ['weights_attention', 'weights_linear', 'weights_norm_att', 'weights_norm_ff']
 
     def forward(self, Q, K, V):
         '''
         forward pass
         '''
-        return transformer_block(Q, K, V, self.num_heads, self.weights_attention, self.weights_linear, self.weights_norm)
+        return transformer_block(Q, K, V, self.num_heads, self.weights_attention, self.weights_linear, self.weights_norm_att, self.weights_norm_ff)
     
     # TODO
     def backward(self, grad_output):

@@ -1,6 +1,16 @@
 import numpy as np
 
 # assume Q dims are divisible by num_heads
+def self_attention(x, num_heads, weights_att, weights_norm_att):
+    """
+    self-attention mechanism
+    """
+    x_norm = layer_norm(x, weights_norm_att)
+    res, attention_cls =  multi_head_attention(x_norm, x_norm, x_norm, num_heads, weights_att)
+
+    return res, attention_cls
+
+
 def multi_head_attention(Q, K, V, num_heads, weights):
     """
     multi-head attention mechanism
@@ -19,11 +29,11 @@ def multi_head_attention(Q, K, V, num_heads, weights):
     Kh = split_heads(Kp, num_heads)
     Vh = split_heads(Vp, num_heads)
 
-    Ah = attention(Qh, Kh, Vh)
+    Ah, scores = attention(Qh, Kh, Vh)
 
     M = combine_heads(Ah)
     out = M @ Wo + bo
-    return out
+    return out, scores[:, 0, :, :]
 
 
 def split_heads(x, num_heads):
@@ -51,7 +61,7 @@ def attention(Q, K, V):
     scores = softmax(scores, axis=-1)
     output = scores @ V
 
-    return output
+    return output, scores
 
 
 def relu(x):
@@ -81,29 +91,30 @@ def layer_norm(x, weights):
     return norm * gamma + beta
 
 
-def feed_forward(x, weights):
+def feed_forward(x, weights_ff, weights_norm_ff):
     '''
     feed forward network
     '''
 
-    ff_1 = relu(x @ weights["W1"].weight + weights["b1"].weight)
-    ff_2 = ff_1 @ weights["W2"].weight + weights["b2"].weight
+    x = layer_norm(x, weights_norm_ff)
+
+    ff_1 = relu(x @ weights_ff["W1"].weight + weights_ff["b1"].weight)
+    ff_2 = ff_1 @ weights_ff["W2"].weight + weights_ff["b2"].weight
 
     return ff_2
 
 
-def transformer_block(Q, K, V, num_heads, weights_attention, weights_linear, weights_norm):
+def transformer_block(Q, K, V, num_heads, weights_attention, weights_linear, weights_norm_att, weights_norm_ff):
     '''
     single transformer block
+    
+    currently assumes Q, K, V are the same
     '''
-    Q_norm = layer_norm(Q, weights_norm)
-    K_norm = layer_norm(K, weights_norm)
-    V_norm = layer_norm(V, weights_norm)
-    x = multi_head_attention(Q_norm, K_norm, V_norm, num_heads, weights_attention)
+
+    x, attention_scores = self_attention(Q, num_heads, weights_attention, weights_norm_att)
     x = Q + x
 
-    x = layer_norm(x, weights_norm)
-    ff = feed_forward(x, weights_linear)
+    ff = feed_forward(x, weights_linear, weights_norm_ff)
     ff = ff + x
 
     return ff
