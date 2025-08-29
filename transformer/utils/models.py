@@ -8,6 +8,8 @@ import numpy as np
 class param:
     weight: np.ndarray
     grad_weight: np.ndarray
+    m: np.ndarray = None  # first moment
+    v: np.ndarray = None  # second moment
 
 
 class ViT_embedding:
@@ -22,8 +24,8 @@ class ViT_embedding:
         patch_dim = self.patch_size * self.patch_size * input_shape[-1]
 
         self.weights = {
-            "W": param(random_init((patch_dim, embed_dim)), np.zeros((patch_dim, embed_dim))),
-            "b": param(random_init((embed_dim,)), np.zeros((embed_dim,))),
+            "W": param(random_init((patch_dim, embed_dim)), np.zeros((patch_dim, embed_dim)), np.zeros((patch_dim, embed_dim)), np.zeros((patch_dim, embed_dim))),
+            "b": param(random_init((embed_dim,)), np.zeros((embed_dim,)), np.zeros((embed_dim,)), np.zeros((embed_dim,)))
         }
         
         self.H, self.W, self.D = self.input_shape
@@ -35,12 +37,12 @@ class ViT_embedding:
 
         # add CLS token
         self.cls_token = {
-            "W": param(random_init((1, 1, embed_dim)), np.zeros((1, 1, embed_dim)))
+            "W": param(random_init((1, 1, embed_dim)), np.zeros((1, 1, embed_dim)), np.zeros((1, 1, embed_dim)), np.zeros((1, 1, embed_dim)))
         }
 
         # add position embedding
         self.pos_embedding = {
-            "W": param(random_init((1, self.L + 1, embed_dim)), np.zeros((1, self.L + 1, embed_dim)))
+            "W": param(random_init((1, self.L + 1, embed_dim)), np.zeros((1, self.L + 1, embed_dim)), np.zeros((1, self.L + 1, embed_dim)), np.zeros((1, self.L + 1, embed_dim)))
         }
 
         self.weight_names = ['weights', 'cls_token', 'pos_embedding']
@@ -98,37 +100,37 @@ class Transformer:
         self.Dh = input_shape[-1] // num_heads
 
         self.weights_attention = {
-            "Wq": param(random_init((input_shape[-1], input_shape[-1])), np.zeros((input_shape[-1], input_shape[-1]))),
-            "bq": param(random_init((input_shape[-1],)), np.zeros((input_shape[-1],))),
+            "Wq": param(random_init((input_shape[-1], input_shape[-1])), np.zeros((input_shape[-1], input_shape[-1])), np.zeros((input_shape[-1], input_shape[-1])), np.zeros((input_shape[-1], input_shape[-1]))),
+            "bq": param(random_init((input_shape[-1],)), np.zeros((input_shape[-1],)), np.zeros((input_shape[-1],)), np.zeros((input_shape[-1],))),
             
-            "Wk": param(random_init((input_shape[-1], input_shape[-1])), np.zeros((input_shape[-1], input_shape[-1]))),
-            "bk": param(random_init((input_shape[-1],)), np.zeros((input_shape[-1],))),
-            
-            "Wv": param(random_init((input_shape[-1], input_shape[-1])), np.zeros((input_shape[-1], input_shape[-1]))),
-            "bv": param(random_init((input_shape[-1],)), np.zeros((input_shape[-1],))),
-            
-            "Wo": param(random_init((input_shape[-1], input_shape[-1])), np.zeros((input_shape[-1], input_shape[-1]))),
-            "bo": param(random_init((input_shape[-1],)), np.zeros((input_shape[-1],))),
+            "Wk": param(random_init((input_shape[-1], input_shape[-1])), np.zeros((input_shape[-1], input_shape[-1])), np.zeros((input_shape[-1], input_shape[-1])), np.zeros((input_shape[-1], input_shape[-1]))),
+            "bk": param(random_init((input_shape[-1],)), np.zeros((input_shape[-1],)), np.zeros((input_shape[-1],)), np.zeros((input_shape[-1],))),
+
+            "Wv": param(random_init((input_shape[-1], input_shape[-1])), np.zeros((input_shape[-1], input_shape[-1])), np.zeros((input_shape[-1], input_shape[-1])), np.zeros((input_shape[-1], input_shape[-1]))),
+            "bv": param(random_init((input_shape[-1],)), np.zeros((input_shape[-1],)), np.zeros((input_shape[-1],)), np.zeros((input_shape[-1],))),
+
+            "Wo": param(random_init((input_shape[-1], input_shape[-1])), np.zeros((input_shape[-1], input_shape[-1])), np.zeros((input_shape[-1], input_shape[-1])), np.zeros((input_shape[-1], input_shape[-1]))),
+            "bo": param(random_init((input_shape[-1],)), np.zeros((input_shape[-1],)), np.zeros((input_shape[-1],)), np.zeros((input_shape[-1],))),
         }
 
         self.d_model = input_shape[-1]
         self.d_ff = 4 * self.d_model
 
         self.weights_linear = {
-            "W1": param(random_init((self.d_model, self.d_ff)), np.zeros((self.d_model, self.d_ff))),
-            "b1": param(random_init((self.d_ff,)), np.zeros((self.d_ff,))),
-            "W2": param(random_init((self.d_ff, self.d_model)), np.zeros((self.d_ff, self.d_model))),
-            "b2": param(random_init((self.d_model,)), np.zeros((self.d_model,))),
+            "W1": param(random_init((self.d_model, self.d_ff)), np.zeros((self.d_model, self.d_ff)), np.zeros((self.d_model, self.d_ff)), np.zeros((self.d_model, self.d_ff))),
+            "b1": param(random_init((self.d_ff,)), np.zeros((self.d_ff,)), np.zeros((self.d_ff,)), np.zeros((self.d_ff,))),
+            "W2": param(random_init((self.d_ff, self.d_model)), np.zeros((self.d_ff, self.d_model)), np.zeros((self.d_ff, self.d_model)), np.zeros((self.d_ff, self.d_model))),
+            "b2": param(random_init((self.d_model,)), np.zeros((self.d_model,)), np.zeros((self.d_model,)), np.zeros((self.d_model,)))
         }
 
         self.weights_norm_att = {
-            "gamma": param(np.ones((self.d_model,)), np.zeros((self.d_model,))),
-            "beta": param(np.zeros((self.d_model,)), np.zeros((self.d_model,))),
+            "gamma": param(np.ones((self.d_model,)), np.zeros((self.d_model,)), np.zeros((self.d_model,)), np.zeros((self.d_model,))),
+            "beta": param(np.zeros((self.d_model,)), np.zeros((self.d_model,)), np.zeros((self.d_model,)), np.zeros((self.d_model,))),
         }
 
         self.weights_norm_ff = {
-            "gamma": param(np.ones((self.d_model,)), np.zeros((self.d_model,))),
-            "beta": param(np.zeros((self.d_model,)), np.zeros((self.d_model,))),
+            "gamma": param(np.ones((self.d_model,)), np.zeros((self.d_model,)), np.zeros((self.d_model,)), np.zeros((self.d_model,))),
+            "beta": param(np.zeros((self.d_model,)), np.zeros((self.d_model,)), np.zeros((self.d_model,)), np.zeros((self.d_model,))),
         }
 
         self.weight_names = ['weights_attention', 'weights_linear', 'weights_norm_att', 'weights_norm_ff']
@@ -295,8 +297,8 @@ class Classifier:
     '''
     def __init__(self, input_dim, num_classes):
         self.weights = {
-            "W": param(random_init((input_dim, num_classes)), np.zeros((input_dim, num_classes))),
-            "b": param(random_init((num_classes,)), np.zeros((num_classes,))),
+            "W": param(random_init((input_dim, num_classes)), np.zeros((input_dim, num_classes)), np.zeros((input_dim, num_classes)), np.zeros((input_dim, num_classes))),
+            "b": param(random_init((num_classes,)), np.zeros((num_classes,)), np.zeros((num_classes,)), np.zeros((num_classes,))),
         }
         self.weight_names = ['weights']
 

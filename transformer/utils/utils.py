@@ -16,7 +16,7 @@ def compute_loss(logits, labels):
     return loss, grad_logits
 
 
-def step(model, learning_rate):
+def step_sgd(model, learning_rate):
     '''
     each param needs a grad attribute
     simple SGD step
@@ -30,6 +30,33 @@ def step(model, learning_rate):
         for key in attr.keys():
 
             attr[key].weight -= learning_rate * attr[key].grad_weight
+
+
+def step_adam(model, lr=0.001, beta1=0.9, beta2=0.999, eps=1e-8, t=1, max_norm=1.0):
+    for name in model.weight_names:
+        attr = getattr(model, name)
+        for key in attr.keys():
+            p = attr[key]
+            # initialize m/v if missing
+            if p.m is None: p.m = np.zeros_like(p.weight)
+            if p.v is None: p.v = np.zeros_like(p.weight)
+
+            # gradient clipping
+            norm = np.linalg.norm(p.grad_weight)
+            if norm > max_norm:
+                p.grad_weight = p.grad_weight * (max_norm / norm)
+
+            # update moments
+            p.m = beta1 * p.m + (1 - beta1) * p.grad_weight
+            p.v = beta2 * p.v + (1 - beta2) * (p.grad_weight ** 2)
+
+            # bias-corrected
+            m_hat = p.m / (1 - beta1**t)
+            v_hat = p.v / (1 - beta2**t)
+
+            # update weight
+            p.weight -= lr * m_hat / (np.sqrt(v_hat) + eps)
+
 
 
 def zero_grad(model):

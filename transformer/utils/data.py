@@ -1,7 +1,7 @@
 
 import os
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFilter
 
 def load_image_dataset(base_dir, image_size=(128, 128), train_split=0.8, batch_size=32):
     """
@@ -65,3 +65,55 @@ def load_image_dataset(base_dir, image_size=(128, 128), train_split=0.8, batch_s
     test_data = make_batches(X_test, y_test, batch_size)
 
     return train_data, test_data
+
+
+import numpy as np
+from PIL import Image, ImageEnhance
+import random
+
+def augment_batch(batch, rotation_range=15, brightness_range=(0.8, 1.2),
+                  contrast_range=(0.8, 1.2), color_range=(0.8, 1.2)):
+    """
+    Apply random rotation and color jitter to a batch of images.
+
+    Args:
+        batch (dict): {'inputs': np.array(B,H,W,C), 'labels': np.array(B,C)}
+        rotation_range (float): max absolute rotation in degrees
+        brightness_range (tuple): min/max factor for brightness
+        contrast_range (tuple): min/max factor for contrast
+        color_range (tuple): min/max factor for saturation (color)
+    
+    Returns:
+        Augmented batch (same dict structure, inputs modified)
+    """
+    B, H, W, C = batch['inputs'].shape
+    augmented_images = []
+
+    for i in range(B):
+        img = batch['inputs'][i]
+        # Convert to PIL Image
+        img_pil = Image.fromarray((img * 255).astype(np.uint8))
+
+        # Random rotation
+        angle = random.uniform(-rotation_range, rotation_range)
+        img_pil = img_pil.rotate(angle)
+
+        # Random flip
+        if random.random() > 0.5:
+            img_pil = img_pil.transpose(Image.FLIP_LEFT_RIGHT)
+
+        if random.random() < 0.3:
+            img_pil = img_pil.filter(ImageFilter.GaussianBlur(radius=random.uniform(0,1.5)))
+
+        # Random color jitter
+        img_pil = ImageEnhance.Brightness(img_pil).enhance(random.uniform(*brightness_range))
+        img_pil = ImageEnhance.Contrast(img_pil).enhance(random.uniform(*contrast_range))
+        img_pil = ImageEnhance.Color(img_pil).enhance(random.uniform(*color_range))
+
+        # Convert back to NumPy array in [0,1]
+        img_aug = np.array(img_pil, dtype=np.float32) / 255.0
+        augmented_images.append(img_aug)
+
+    batch_aug = batch.copy()
+    batch_aug['inputs'] = np.stack(augmented_images)
+    return batch_aug
