@@ -1,15 +1,6 @@
 import numpy as np
 
 # assume Q dims are divisible by num_heads
-def self_attention(x, num_heads, weights_att):
-    """
-    self-attention mechanism
-    """
-    res, attention_cls =  multi_head_attention(x, x, x, num_heads, weights_att)
-
-    return res, attention_cls
-
-
 def multi_head_attention(Q, K, V, num_heads, weights):
     """
     multi-head attention mechanism
@@ -20,7 +11,11 @@ def multi_head_attention(Q, K, V, num_heads, weights):
     Wv, bv = weights["Wv"].weight, weights["bv"].weight
     Wo, bo = weights["Wo"].weight, weights["bo"].weight
 
-    Qp = Q @ Wq + bq 
+    # Q, K, V
+    # x is prior state
+    # no op to get here
+    # Qp, Kp, Vp output
+    Qp = Q @ Wq + bq
     Kp = K @ Wk + bk
     Vp = V @ Wv + bv
 
@@ -28,11 +23,27 @@ def multi_head_attention(Q, K, V, num_heads, weights):
     Kh = split_heads(Kp, num_heads)
     Vh = split_heads(Vp, num_heads)
 
+    qkv_split = (Qh, Kh, Vh)
+
     Ah, scores = attention(Qh, Kh, Vh)
 
-    M = combine_heads(Ah)
-    out = M @ Wo + bo
-    return out, scores[:, 0, :, :], M
+    x_combined = combine_heads(Ah)
+
+    #x_combined is prior state
+    # inverse is 
+    # - split()
+    # - inverse attention
+    #  forward is:
+    #   - scores = Q @ np.transpose(K, (0, 1, 3, 2)) / dim ** 0.5
+    #   - softmax(scores, axis=-1)
+    #   - scores @ Vh
+    #  inverse is:
+    #   -
+    #   -
+    #   -
+    # - combine heads of each individual QKV
+    out = x_combined @ Wo + bo
+    return out, scores, x_combined, qkv_split
 
 
 def split_heads(x, num_heads):
@@ -49,16 +60,16 @@ def combine_heads(x):
     return np.transpose(x, (0, 2, 1, 3)).reshape(B, L, H * Dh)
 
 
-def attention(Q, K, V):
+def attention(Qh, Kh, Vh):
     '''
     scaled dot product attention
     '''
 
-    dim = Q.shape[-1]
+    dim = Qh.shape[-1]
 
-    scores = Q @ np.transpose(K, (0, 1, 3, 2)) / dim ** 0.5
+    scores = Qh @ np.transpose(Kh, (0, 1, 3, 2)) / dim ** 0.5
     scores = softmax(scores, axis=-1)
-    output = scores @ V
+    output = scores @ Vh
 
     return output, scores
 
@@ -91,12 +102,10 @@ def layer_norm(x, weights):
     return norm * gamma + beta, norm, inv_std
 
 
-def feed_forward(x, weights_ff, weights_norm_ff):
+def feed_forward(x, weights_ff):
     '''
     feed forward network
     '''
-
-    x = layer_norm(x, weights_norm_ff)
 
     ff_1 = relu(x @ weights_ff["W1"].weight + weights_ff["b1"].weight)
     ff_2 = ff_1 @ weights_ff["W2"].weight + weights_ff["b2"].weight
